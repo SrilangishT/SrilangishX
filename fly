@@ -1,0 +1,153 @@
+-- Ensure the script only runs in a player's client context
+local plr = game.Players.LocalPlayer
+local character = plr.Character or plr.CharacterAdded:Wait()
+local humanoid = character:WaitForChild("Humanoid")
+local lowerTorso = character:WaitForChild("LowerTorso")
+local StarterGui = game:GetService("StarterGui")
+
+-- Clean up any old Core parts
+if workspace:FindFirstChild("Core") then
+    workspace.Core:Destroy()
+end
+
+-- Create Core part attached to player
+local Core = Instance.new("Part")
+Core.Name = "Core"
+Core.Size = Vector3.new(0.05, 0.05, 0.05)
+Core.Transparency = 1
+Core.CanCollide = false
+Core.Parent = workspace
+
+local Weld = Instance.new("Weld", Core)
+Weld.Part0 = Core
+Weld.Part1 = lowerTorso
+Weld.C0 = CFrame.new(0, 0, 0)
+
+local flying = false
+local speed = 10
+local keys = {w = false, s = false, a = false, d = false}
+local bodyPos, bodyGyro
+local mouse = plr:GetMouse()
+
+-- Function to send Roblox Core notification with image
+local function notify(title, text)
+    pcall(function()
+        StarterGui:SetCore("SendNotification", {
+            Title = title;
+            Text = text;
+            Icon = "rbxassetid://105549818441575"; -- Decal/Image specified by user
+            Duration = 5;
+        })
+    end)
+end
+
+-- Function to start flying
+local function startFlying()
+    if flying then return end
+    flying = true
+    
+    notify("Flight", "Flight: ON")
+
+    if Core and Core.Parent then
+        bodyPos = Instance.new("BodyPosition", Core)
+        bodyPos.Name = "EPIXPOS"
+        bodyPos.maxForce = Vector3.new(math.huge, math.huge, math.huge)
+        bodyPos.position = Core.Position
+
+        bodyGyro = Instance.new("BodyGyro", Core)
+        bodyGyro.maxTorque = Vector3.new(9e9, 9e9, 9e9)
+        bodyGyro.cframe = Core.CFrame
+    end
+
+    task.spawn(function()
+        while flying and Core and Core.Parent and humanoid and humanoid.Health > 0 do
+            task.wait()
+            humanoid.PlatformStand = true
+            
+            local cam = workspace.CurrentCamera
+            local newCFrame = bodyGyro.CFrame - bodyGyro.CFrame.p + bodyPos.Position
+            
+            if not keys.w and not keys.s and not keys.a and not keys.d then
+                speed = 5
+            else
+                speed = 10
+            end
+
+            if keys.w then
+                newCFrame = newCFrame + cam.CFrame.LookVector * speed
+            end
+            if keys.s then
+                newCFrame = newCFrame - cam.CFrame.LookVector * speed
+            end
+            if keys.d then
+                newCFrame = newCFrame * CFrame.new(speed, 0, 0)
+            end
+            if keys.a then
+                newCFrame = newCFrame * CFrame.new(-speed, 0, 0)
+            end
+
+            bodyPos.position = newCFrame.p
+            bodyGyro.CFrame = cam.CFrame
+        end
+
+        -- Cleanup when flight stops
+        if bodyGyro then bodyGyro:Destroy() end
+        if bodyPos then bodyPos:Destroy() end
+        if humanoid then humanoid.PlatformStand = false end
+        flying = false
+    end)
+end
+
+local function stopFlying()
+    if flying then
+        flying = false
+        notify("Flight", "Flight: OFF")
+    end
+end
+
+-- Keyboard Controls
+mouse.KeyDown:connect(function(key)
+    if key == "w" then keys.w = true
+    elseif key == "s" then keys.s = true
+    elseif key == "a" then keys.a = true
+    elseif key == "d" then keys.d = true
+    elseif key == "x" then
+        if flying then
+            stopFlying()
+        else
+            startFlying()
+        end
+    end
+end)
+
+mouse.KeyUp:connect(function(key)
+    if key == "w" then keys.w = false
+    elseif key == "s" then keys.s = false
+    elseif key == "a" then keys.a = false
+    elseif key == "d" then keys.d = false
+    end
+end)
+
+-- Handle character respawns safely
+plr.CharacterAdded:Connect(function(newChar)
+    character = newChar
+    humanoid = newChar:WaitForChild("Humanoid")
+    lowerTorso = newChar:WaitForChild("LowerTorso")
+    stopFlying()
+    if Core then Core:Destroy() end
+    
+    Core = Instance.new("Part")
+    Core.Name = "Core"
+    Core.Size = Vector3.new(0.05, 0.05, 0.05)
+    Core.Transparency = 1
+    Core.CanCollide = false
+    Core.Parent = workspace
+
+    local newWeld = Instance.new("Weld", Core)
+    newWeld.Part0 = Core
+    newWeld.Part1 = lowerTorso
+    newWeld.C0 = CFrame.new(0, 0, 0)
+end)
+
+-- Initial notification letting you know it's loaded and the keybind
+notify("Flight", "keybind x to turn fly and off")
