@@ -1,0 +1,66 @@
+-- Services
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+
+local player = Players.LocalPlayer
+local mouse = player:GetMouse()
+
+local character = player.Character or player.CharacterAdded:Wait()
+local humanoid = character:WaitForChild("Humanoid")
+local humanoidRootPart = character:WaitForChild("HumanoidRootPart")
+
+-- Check if the character is R15 (IKControl only works smoothly on R15 rigs)
+if humanoid.RigType ~= Enum.HumanoidRigType.R15 then
+	warn("IKControl script requires an R15 rig.")
+	return
+end
+
+-- Create an invisible target part for the hands to reach toward
+local targetPart = Instance.new("Part")
+targetPart.Size = Vector3.new(0.2, 0.2, 0.2)
+targetPart.Transparency = 1
+targetPart.CanCollide = false
+targetPart.Anchored = true
+targetPart.Parent = workspace
+
+-- Create IKControl for the Right Arm
+local rightIK = Instance.new("IKControl")
+rightIK.Type = Enum.IKControlType.Position
+rightIK.EndEffector = character:WaitForChild("RightHand")
+rightIK.ChainRoot = character:WaitForChild("RightUpperArm")
+rightIK.Target = targetPart
+rightIK.Weight = 1
+rightIK.SmoothTime = 0.05
+rightIK.Parent = character
+
+-- Create IKControl for the Left Arm
+local leftIK = Instance.new("IKControl")
+leftIK.Type = Enum.IKControlType.Position
+leftIK.EndEffector = character:WaitForChild("LeftHand")
+leftIK.ChainRoot = character:WaitForChild("LeftUpperArm")
+leftIK.Target = targetPart
+leftIK.Weight = 1
+leftIK.SmoothTime = 0.05
+leftIK.Parent = character
+
+-- Update target position every frame to match the mouse
+RunService.RenderStepped:Connect(function()
+	if mouse.Hit then
+		-- Move the invisible target part to the mouse hit position
+		targetPart.Position = mouse.Hit.Position
+		
+		-- Optional: Limit extension distance so arms don't break if mouse is too far away
+		local distance = (targetPart.Position - humanoidRootPart.Position).Magnitude
+		if distance > 7 then -- Adjust this number to change max arm stretch length
+			local direction = (targetPart.Position - humanoidRootPart.Position).Unit
+			targetPart.Position = humanoidRootPart.Position + (direction * 7)
+		end
+	end
+end)
+
+-- Cleanup target part if character dies or leaves
+character.AncestryChanged:Connect(function(_, parent)
+	if not parent then
+		targetPart:Destroy()
+	end
+end)
