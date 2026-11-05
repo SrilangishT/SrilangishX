@@ -1,0 +1,230 @@
+-- Ensure the script runs on the client
+local plr = game.Players.LocalPlayer
+local character = plr.Character or plr.CharacterAdded:Wait()
+local humanoid = character:WaitForChild("Humanoid")
+local animator = humanoid:WaitForChild("Animator")
+local lowerTorso = character:WaitForChild("LowerTorso")
+local backpack = plr:WaitForChild("Backpack")
+local StarterGui = game:GetService("StarterGui")
+
+-- Clean up any old Core parts or tools
+if workspace:FindFirstChild("Core") then workspace.Core:Destroy() end
+if character:FindFirstChild("FlightTool") then character.FlightTool:Destroy() end
+if backpack:FindFirstChild("FlightTool") then backpack.FlightTool:Destroy() end
+
+-- Create the Flight Tool
+local tool = Instance.new("Tool")
+tool.Name = "FlightTool"
+tool.RequiresHandle = false
+tool.Parent = backpack
+
+-- Create Core part attached to player
+local Core = Instance.new("Part")
+Core.Name = "Core"
+Core.Size = Vector3.new(0.05, 0.05, 0.05)
+Core.Transparency = 1
+Core.CanCollide = false
+Core.Parent = workspace
+
+local Weld = Instance.new("Weld", Core)
+Weld.Part0 = Core
+Weld.Part1 = lowerTorso
+Weld.C0 = CFrame.new(0, 0, 0)
+
+local flying = false
+local speed = 10
+local keys = {w = false, s = false, a = false, d = false}
+local bodyPos, bodyGyro
+local mouse = plr:GetMouse()
+
+-- Animation setup
+local idleAnim = Instance.new("Animation")
+idleAnim.AnimationId = "rbxassetid://13850660986"
+
+local moveAnim = Instance.new("Animation")
+moveAnim.AnimationId = "rbxassetid://13850657882"
+
+local idleTrack, moveTrack
+
+-- Function to send notification
+local function notify(title, text)
+    pcall(function()
+        StarterGui:SetCore("SendNotification", {
+            Title = title;
+            Text = text;
+            Icon = "rbxassetid://105549818441575";
+            Duration = 3;
+        })
+    end)
+end
+
+-- Function to start flying
+local function startFlying()
+    if flying then return end
+    flying = true
+    notify("Flight", "Flight: ON (Equipped)")
+
+    pcall(function()
+        if not idleTrack then idleTrack = animator:LoadAnimation(idleAnim) end
+        if not moveTrack then moveTrack = animator:LoadAnimation(moveAnim) end
+        idleTrack.Looped = true
+        moveTrack.Looped = true
+    end)
+
+    if Core and Core.Parent then
+        bodyPos = Instance.new("BodyPosition", Core)
+        bodyPos.Name = "EPIXPOS"
+        bodyPos.maxForce = Vector3.new(math.huge, math.huge, math.huge)
+        bodyPos.position = Core.Position
+
+        bodyGyro = Instance.new("BodyGyro", Core)
+        bodyGyro.maxTorque = Vector3.new(9e9, 9e9, 9e9)
+        bodyGyro.cframe = Core.CFrame
+    end
+
+    task.spawn(function()
+        local lastState = nil
+        local currentTilt = 0
+        local currentPitch = 0 -- Pitch angle (0 = upright, -90 = laying horizontal)
+
+        while flying and Core and Core.Parent and humanoid and humanoid.Health > 0 do
+            task.wait()
+            humanoid.PlatformStand = true
+            
+            local cam = workspace.CurrentCamera
+            local newCFrame = bodyGyro.CFrame - bodyGyro.CFrame.p + bodyPos.Position
+            
+            local isMoving = keys.w or keys.s or keys.a or keys.d
+
+            -- Target pitch: -90 degrees (Superman pose) when moving, 0 degrees (Upright pose) when idle
+            local targetPitch = isMoving and math.rad(-90) or 0
+
+            -- Dynamic animation and speed state management
+            if not isMoving then
+                speed = 5
+                if lastState ~= "idle" then
+                    lastState = "idle"
+                    if moveTrack and moveTrack.IsPlaying then moveTrack:Stop() end
+                    if idleTrack and not idleTrack.IsPlaying then idleTrack:Play() end
+                end
+            else
+                speed = 10
+                if lastState ~= "moving" then
+                    lastState = "moving"
+                    if idleTrack and idleTrack.IsPlaying then idleTrack:Stop() end
+                    if moveTrack and not moveTrack.IsPlaying then moveTrack:Play() end
+                end
+            end
+
+            if keys.w then
+                newCFrame = newCFrame + cam.CFrame.LookVector * speed
+            end
+            if keys.s then
+                newCFrame = newCFrame - cam.CFrame.LookVector * speed
+            end
+            if keys.d then
+                newCFrame = newCFrame * CFrame.new(speed, 0, 0)
+            end
+            if keys.a then
+                newCFrame = newCFrame * CFrame.new(-speed, 0, 0)
+            end
+
+            bodyPos.position = newCFrame.p
+
+            -- Side banking tilt calculation (only applied when moving)
+            local targetTilt = 0
+            if isMoving then
+                if keys.a then
+                    targetTilt = math.rad(-25)
+                elseif keys.d then
+                    targetTilt = math.rad(25)
+                end
+            end
+            
+            -- Smooth transition interpolations
+            currentTilt = currentTilt + (targetTilt - currentTilt) * 0.2
+            currentPitch = currentPitch + (targetPitch - currentPitch) * 0.2
+
+            -- Apply rotation: smooth transition between upright (idle) and -90 deg (moving)
+            bodyGyro.CFrame = cam.CFrame * CFrame.Angles(currentPitch, 0, currentTilt)
+        end
+
+        if idleTrack and idleTrack.IsPlaying then idleTrack:Stop() end
+        if moveTrack and moveTrack.IsPlaying then moveTrack:Stop() end
+
+        if bodyGyro then bodyGyro:Destroy() end
+        if bodyPos then bodyPos:Destroy() end
+        if humanoid then humanoid.PlatformStand = false end
+        flying = false
+    end)
+end
+
+-- Function to stop flying
+local function stopFlying()
+    if flying then
+        flying = false
+        notify("Flight", "Flight: OFF (Unequipped)")
+    end
+end
+
+-- Tool Equipping triggers flight
+tool.Equipped:Connect(function()
+    startFlying()
+end)
+
+-- Tool Unequipping stops flight
+tool.Unequipped:Connect(function()
+    stopFlying()
+end)
+
+-- Keyboard Controls for Movement
+mouse.KeyDown:connect(function(key)
+    if key == "w" then keys.w = true
+    elseif key == "s" then keys.s = true
+    elseif key == "a" then keys.a = true
+    elseif key == "d" then keys.d = true
+    end
+end)
+
+mouse.KeyUp:connect(function(key)
+    if key == "w" then keys.w = false
+    elseif key == "s" then keys.s = false
+    elseif key == "a" then keys.a = false
+    elseif key == "d" then keys.d = false
+    end
+end)
+
+-- Handle Character Respawns
+plr.CharacterAdded:Connect(function(newChar)
+    character = newChar
+    humanoid = newChar:WaitForChild("Humanoid")
+    animator = humanoid:WaitForChild("Animator")
+    lowerTorso = newChar:WaitForChild("LowerTorso")
+    backpack = plr:WaitForChild("Backpack")
+    
+    stopFlying()
+    if Core then Core:Destroy() end
+    
+    Core = Instance.new("Part")
+    Core.Name = "Core"
+    Core.Size = Vector3.new(0.05, 0.05, 0.05)
+    Core.Transparency = 1
+    Core.CanCollide = false
+    Core.Parent = workspace
+
+    local newWeld = Instance.new("Weld", Core)
+    newWeld.Part0 = Core
+    newWeld.Part1 = lowerTorso
+    newWeld.C0 = CFrame.new(0, 0, 0)
+
+    -- Recreate tool on respawn
+    local newTool = Instance.new("Tool")
+    newTool.Name = "FlightTool"
+    newTool.RequiresHandle = false
+    newTool.Parent = backpack
+    
+    newTool.Equipped:Connect(startFlying)
+    newTool.Unequipped:Connect(stopFlying)
+end)
+
+notify("Flight Tool", "Check your backpack for the 'FlightTool'!")
