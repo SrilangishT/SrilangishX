@@ -1,0 +1,102 @@
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+
+local COMMAND = "!shazam"
+local SHIRT_ID = 87392644467727
+local PANTS_ID = 118514450833466
+local SOUND_ID = 12221984
+
+-- Helper function taken from your outfit script to correctly extract/resolve clothing assets
+local function applyClothingAsset(character, className, targetProperty, assetId)
+	local finalAssetTemplateId = "rbxassetid://" .. tostring(assetId)
+	
+	-- Try to fetch the actual asset template safely via GetObjects
+	local loadSuccess, assetObjects = pcall(function() 
+		return game:GetObjects("rbxassetid://" .. tostring(assetId)) 
+	end)
+	
+	if loadSuccess and assetObjects and assetObjects[1] then
+		local obj = assetObjects[1]
+		if obj:IsA("Shirt") and className == "Shirt" then 
+			finalAssetTemplateId = obj.ShirtTemplate 
+		elseif obj:IsA("Pants") and className == "Pants" then 
+			finalAssetTemplateId = obj.PantsTemplate 
+		end
+		obj:Destroy()
+	end
+
+	-- Apply to character
+	local existingAsset = character:FindFirstChildOfClass(className)
+	if existingAsset then 
+		existingAsset[targetProperty] = finalAssetTemplateId
+	else
+		local newAsset = Instance.new(className)
+		newAsset[targetProperty] = finalAssetTemplateId
+		newAsset.Parent = character
+	end
+end
+
+local function applyShazamClient(character)
+	local hrp = character:WaitForChild("HumanoidRootPart", 5)
+	if not hrp then return end
+
+	----------------------------------------------------
+	-- 1. SOUND EFFECT (Client-side)
+	----------------------------------------------------
+	local sound = Instance.new("Sound")
+	sound.SoundId = "rbxassetid://" .. SOUND_ID
+	sound.Volume = 2
+	sound.Parent = hrp
+	sound:Play()
+
+	----------------------------------------------------
+	-- 2. LIGHTNING VISUAL EFFECT (Client-side)
+	----------------------------------------------------
+	local strikePosition = hrp.Position
+	local skyPosition = strikePosition + Vector3.new(0, 150, 0)
+	local distance = (skyPosition - strikePosition).Magnitude
+
+	local lightning = Instance.new("Part")
+	lightning.Name = "ClientLightning"
+	lightning.Anchored = true
+	lightning.CanCollide = false
+	lightning.Material = Enum.Material.Neon
+	lightning.Color = Color3.fromRGB(255, 255, 200)
+	lightning.Size = Vector3.new(1.5, distance, 1.5)
+	lightning.CFrame = CFrame.lookAt((strikePosition + skyPosition) / 2, strikePosition) * CFrame.Angles(math.rad(90), 0, 0)
+	lightning.Parent = workspace
+
+	local pointLight = Instance.new("PointLight")
+	pointLight.Brightness = 10
+	pointLight.Range = 30
+	pointLight.Color = Color3.fromRGB(255, 255, 200)
+	pointLight.Parent = hrp
+
+	task.delay(0.25, function()
+		if lightning then lightning:Destroy() end
+		if pointLight then pointLight:Destroy() end
+	end)
+
+	----------------------------------------------------
+	-- 3. APPLY SHIRT & PANTS (Client-side with Asset Resolving)
+	----------------------------------------------------
+	task.spawn(function()
+		pcall(function()
+			applyClothingAsset(character, "Shirt", "ShirtTemplate", SHIRT_ID)
+		end)
+		
+		pcall(function()
+			applyClothingAsset(character, "Pants", "PantsTemplate", PANTS_ID)
+		end)
+	end)
+end
+
+-- Listen to player chat locally
+LocalPlayer.Chatted:Connect(function(message)
+	if string.lower(message) == string.lower(COMMAND) then
+		local character = LocalPlayer.Character
+		if character then
+			applyShazamClient(character)
+		end
+	end
+end)
