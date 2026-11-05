@@ -1,0 +1,83 @@
+-- Services
+local Players = game:GetService("Players")
+local StarterGui = game:GetService("StarterGui")
+local VirtualUser = game:GetService("VirtualUser")
+
+local player = Players.LocalPlayer
+local character = player.Character or player.CharacterAdded:Wait()
+local humanoidRootPart = character:WaitForChild("HumanoidRootPart")
+
+-- Target Coordinates
+local targetPosition = Vector3.new(-279.52, 22.57, -1140.84)
+
+-- Display Core Roblox Notification
+local function sendNotification()
+    pcall(function()
+        StarterGui:SetCore("SendNotification", {
+            Title = "SrilangishX";
+            Text = "SrilangishX Boxing Farm Loaded";
+            Duration = 5;
+        })
+    end)
+end
+
+-- Teleport to coordinates
+local function teleportToCoordinates()
+    if character and humanoidRootPart then
+        humanoidRootPart.CFrame = CFrame.new(targetPosition)
+    end
+end
+
+-- Equip the "Combat" tool from Backpack
+local function equipCombatTool()
+    local backpack = player:FindFirstChildOfClass("Backpack")
+    if backpack then
+        local combatTool = backpack:FindFirstChild("Combat")
+        if combatTool and character:FindFirstChildOfClass("Humanoid") then
+            character.Humanoid:EquipTool(combatTool)
+        end
+    end
+end
+
+-- Single click (press & release)
+local function clickAction()
+    local equippedTool = character:FindFirstChild("Combat")
+    if equippedTool and equippedTool:IsA("Tool") then
+        equippedTool:Activate()
+        
+        VirtualUser:Button1Down(Vector2.new(0, 0))
+        task.wait(0.05)
+        VirtualUser:Button1Up(Vector2.new(0, 0))
+    end
+end
+
+-- Execution Loop
+task.spawn(function()
+    -- Send Notification on load
+    sendNotification()
+    
+    -- Teleport and equip initial setup
+    teleportToCoordinates()
+    task.wait(0.5)
+    equipCombatTool()
+    
+    while true do
+        character = player.Character or player.CharacterAdded:Wait()
+        humanoidRootPart = character:WaitForChild("HumanoidRootPart")
+        
+        -- Position check
+        if (humanoidRootPart.Position - targetPosition).Magnitude > 10 then
+            teleportToCoordinates()
+        end
+        
+        -- Equip check
+        if not character:FindFirstChild("Combat") then
+            equipCombatTool()
+        end
+        
+        -- Click loop
+        clickAction()
+        
+        task.wait(0.9)
+    end
+end)
